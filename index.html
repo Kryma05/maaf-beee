@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Maafin Aku Ya? ❤️</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background-color: #ffe6e6; 
+            font-family: 'Arial', sans-serif;
+            display: flex; justify-content: center; align-items: center;
+            height: 100vh; overflow: hidden;
+            touch-action: none; -webkit-user-select: none; user-select: none;
+        }
+        canvas {
+            background-color: #ffb3b3; 
+            max-width: 100%; max-height: 100vh;
+            box-shadow: 0 0 20px rgba(0,0,0,0.2);
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="gameCanvas" width="360" height="640"></canvas>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+
+        // Game State: START, PLAYING, GAMEOVER, WIN
+        let gameState = "START"; 
+        let score = 0;
+
+        // Sistem Running Text (Pesan Berjalan)
+        const runningText = {
+            x: 360,
+            text: "Semangat mainnya sayang! 😘 Hubungan kita jauh lebih berharga dari sekadar gengsi.. Aku minta maaf ya.. ❤️",
+            speed: 1.5,
+            update() {
+                if (gameState === "PLAYING") {
+                    this.x -= this.speed;
+                    // Jika teks sudah habis lewat kiri, reset ke kanan biar muter terus
+                    let textWidth = ctx.measureText(this.text).width;
+                    if (this.x < -textWidth) {
+                        this.x = canvas.width + 50;
+                    }
+                }
+            },
+            draw() {
+                if (gameState === "PLAYING" || gameState === "START") {
+                    // Banner background untuk running text
+                    ctx.fillStyle = "rgba(255, 255, 255, 0.25)";
+                    ctx.fillRect(0, 95, canvas.width, 35);
+                    
+                    // Teks pesan
+                    ctx.fillStyle = "#fff";
+                    ctx.font = "bold 15px Arial";
+                    ctx.textAlign = "left";
+                    ctx.textBaseline = "middle";
+                    ctx.fillText(this.text, this.x, 112);
+                }
+            },
+            changeText(newText) {
+                if (this.text !== newText) {
+                    this.text = newText;
+                    this.x = canvas.width + 20; // Mulai mengalir dari kanan lagi
+                }
+            }
+        };
+
+        // Kumpulan pesan yang otomatis berubah sesuai progres skor
+        function updatePesanBerdasarkanSkor() {
+            if (score >= 0 && score < 4) {
+                runningText.changeText("Semangat mainnya Bebee! 😘 Bebe semalam aku ketiduran ga sempat ke bangun sayang.. Aku minta maaf ya.. ❤️");
+            } else if (score >= 4 && score < 8) {
+                runningText.changeText("Sayang, maafin dede jujur aku sebenarnya kangennn. 🥺🌸");
+            } else if (score >= 8 && score < 12) {
+                runningText.changeText("Jangan cuekin dede lagi bebee. aku kangenn bangeet plissss 🌟💕");
+            } else if (score >= 12) {
+                runningText.changeText("Dikittt lagi beeeee! btw klo kmu mainin ini brrti aku udah berangkat ke mks. Lihat di depan, aku udah nungguin kamu! 😍👉");
+            }
+        }
+
+        // Player (Cewekmu) - Super Easy & Ringan
+        const bird = {
+            x: 60, y: 300, radius: 15,
+            gravity: 0.23, velocity: 0, jump: -5.3, 
+            draw() {
+                ctx.font = "30px Arial";
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillText("👧", this.x, this.y); 
+            },
+            update() {
+                if (gameState === "PLAYING") {
+                    this.velocity += this.gravity;
+                    this.y += this.velocity;
+                    if (this.y + this.radius >= canvas.height - 80) {
+                        this.y = canvas.height - 80 - this.radius;
+                        gameState = "GAMEOVER";
+                    }
+                    if (this.y - this.radius <= 0) {
+                        this.y = this.radius;
+                        this.velocity = 0;
+                    }
+                }
+            },
+            flap() { this.velocity = this.jump; }
+        };
+
+        // Target Ending (Kamu)
+        const target = {
+            x: 400, y: 300, active: false,
+            draw() {
+                if (!this.active) return;
+                ctx.font = "35px Arial";
+                ctx.fillText("👦", this.x, this.y); 
+            },
+            update() {
+                if (this.active && gameState === "PLAYING") {
+                    this.x -= 1.5; 
+                    let dist = Math.hypot(bird.x - this.x, bird.y - this.y);
+                    if (dist < 35) {
+                        gameState = "WIN";
+                    }
+                }
+            }
+        };
+
+        // Rintangan Petir (Sangat Mudah Dilewati)
+        const pipes = {
+            position: [], gap: 180, width: 50, speed: 1.8, timer: 0, spawnRate: 140,
+            draw() {
+                this.position.forEach(p => {
+                    ctx.fillStyle = "#ff4d4d";
+                    ctx.fillRect(p.x, 0, this.width, p.topHeight);
+                    ctx.font = "20px Arial";
+                    ctx.fillText("⚡", p.x + 25, p.topHeight - 15);
+
+                    let bottomY = p.topHeight + this.gap;
+                    ctx.fillRect(p.x, bottomY, this.width, canvas.height - 80 - bottomY);
+                    ctx.fillText("⚡", p.x + 25, bottomY + 15);
+                });
+            },
+            update() {
+                if (gameState !== "PLAYING" || target.active) return;
+
+                this.timer++;
+                if (this.timer % this.spawnRate === 0) {
+                    let topHeight = Math.floor(Math.random() * (200 - 80) + 80);
+                    this.position.push({ x: canvas.width, topHeight: topHeight, passed: false });
+                }
+
+                this.position.forEach((p, index) => {
+                    p.x -= this.speed;
+
+                    // Deteksi Tabrakan
+                    let pipeBottomY = p.topHeight + this.gap;
+                    if (bird.x + bird.radius > p.x && bird.x - bird.radius < p.x + this.width) {
+                        if (bird.y - bird.radius < p.topHeight || bird.y + bird.radius > pipeBottomY) {
+                            gameState = "GAMEOVER";
+                        }
+                    }
+
+                    // Lolos Pipa
+                    if (!p.passed && p.x + this.width / 2 < bird.x) {
+                        score++;
+                        p.passed = true;
+
+                        // Perbarui teks berjalan secara real-time saat skor naik
+                        updatePesanBerdasarkanSkor();
+
+                        // Munculkan kamu di ujung jika skor capai 15
+                        if (score >= 15) {
+                            target.active = true;
+                            target.x = canvas.width + 60;
+                            target.y = bird.y; 
+                        }
+                    }
+
+                    if (p.x + this.width < 0) this.position.splice(index, 1);
+                });
+            }
+        };
+
+        function drawBackground() {
+            ctx.fillStyle = "#ff9999";
+            ctx.fillRect(0, canvas.height - 80, canvas.width, 80);
+            ctx.fillStyle = "#ff6666";
+            ctx.fillRect(0, canvas.height - 80, canvas.width, 10);
+            
+            ctx.fillStyle = "rgba(255,255,255,0.3)";
+            ctx.font = "16px Arial";
+            ctx.fillText("❤️", 40, 160);
+            ctx.fillText("💖", 320, 180);
+            ctx.fillText("💕", 180, 230);
+        }
+
+        function drawUI() {
+            ctx.textAlign = "center";
+            
+            if (gameState === "START") {
+                ctx.fillStyle = "rgba(0,0,0,0.4)";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = "#fff";
+                ctx.font = "bold 22px Arial";
+                ctx.fillText("Misi Baikan Dede 👧❤️", canvas.width / 2, 230);
+                ctx.font = "15px Arial";
+                ctx.fillText("Kamu harus terbang lewati petir amarah", canvas.width / 2, 270);
+                ctx.fillText("untuk nemuin kamu di ujung!", canvas.width / 2, 295);
+                ctx.font = "bold 18px Arial";
+                ctx.fillStyle = "#fff0f5";
+                ctx.fillText("Ketuk Layar untuk Mulai", canvas.width / 2, 380);
+            }
+
+            if (gameState === "GAMEOVER") {
+                ctx.fillStyle = "rgba(0,0,0,0.6)";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = "#fff";
+                ctx.font = "bold 24px Arial";
+                ctx.fillText("Yah, bebe Nabrak! 😢", canvas.width / 2, 240);
+                ctx.font = "16px Arial";
+                ctx.fillText("Ayo semangat bebeee, jalannya gampang kok, yuk coba lagi..", canvas.width / 2, 290);
+                ctx.font = "bold 18px Arial";
+                ctx.fillText("Ketuk Layar untuk Coba Lagi", canvas.width / 2, 370);
+            }
+
+            if (gameState === "WIN") {
+                ctx.fillStyle = "rgba(255, 105, 180, 0.95)"; 
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = "#fff";
+                
+                ctx.font = "70px Arial";
+                ctx.fillText("🥰👩‍❤️‍💋‍👨❤️", canvas.width / 2, 200); 
+                
+                ctx.font = "bold 26px Arial";
+                ctx.fillText("YAY! KITA KETEMU!", canvas.width / 2, 280);
+                
+                ctx.font = "16px Arial";
+                let endLines = [
+                    "\"Yeyyyy kita baikannn.\"",
+                    "\"Aku minta maaf dari lubuk hati paling dalam.\"",
+                    "\"WOFYUUUUUU MWAHHH, sayangku!\"",
+                    "Jangan marahan lagi ya? 🥺❤️"
+                ];
+                endLines.forEach((line, i) => {
+                    ctx.fillText(line, canvas.width / 2, 340 + (i * 30));
+                });
+            }
+
+            if (gameState === "PLAYING") {
+                ctx.fillStyle = "#fff";
+                ctx.font = "bold 24px Arial";
+                ctx.fillText(`Mendekati Kamu: ${score}/15`, canvas.width / 2, 65);
+            }
+        }
+
+        function handleInput(e) {
+            e.preventDefault();
+            if (gameState === "START") {
+                gameState = "PLAYING";
+                updatePesanBerdasarkanSkor();
+            } else if (gameState === "PLAYING") {
+                bird.flap();
+            } else if (gameState === "GAMEOVER") {
+                score = 0;
+                bird.y = 300; bird.velocity = 0;
+                pipes.position = []; pipes.timer = 0;
+                target.active = false;
+                runningText.x = canvas.width;
+                gameState = "PLAYING";
+                updatePesanBerdasarkanSkor();
+            }
+        }
+
+        window.addEventListener("touchstart", handleInput, { passive: false });
+        window.addEventListener("mousedown", function(e) {
+            if ('ontouchstart' in window) return;
+            handleInput(e);
+        });
+
+        function loop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            bird.update();
+            pipes.update();
+            target.update();
+            runningText.update();
+
+            pipes.draw();
+            drawBackground();
+            bird.draw();
+            target.draw();
+            runningText.draw();
+            drawUI();
+
+            requestAnimationFrame(loop);
+        }
+        loop();
+    </script>
+</body>
+</html>
